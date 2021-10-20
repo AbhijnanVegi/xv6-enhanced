@@ -152,6 +152,15 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // PBS Related fields
+#ifdef PBS
+  p->priority = 60;
+  p->nrun = 0;
+  p->rtime = 0;
+  p->wtime = 0;
+  p->btime = 0;
+#endif
+
   return p;
 }
 
@@ -388,6 +397,18 @@ void exit(int status)
 
   acquire(&p->lock);
 
+  // Update run times
+#ifdef PBS
+  if (p->state == RUNNING)
+  {
+    p->rtime = ticks - p->btime;
+  }
+  else if (p->state == SLEEPING)
+  {
+    p->wtime = ticks - p->btime;
+  }
+#endif
+
   p->xstate = status;
   p->state = ZOMBIE;
 
@@ -451,6 +472,40 @@ int wait(uint64 addr)
     sleep(p, &wait_lock); // DOC: wait-sleep
   }
 }
+#ifdef PBS
+int _priority(struct proc *p)
+{
+  int nice;
+  int dp;
+  if (p->rtime)
+    nice = ((float)p->wtime / (p->rtime + p->wtime)) * 10;
+  else
+    nice = 5;
+  dp = p->priority - nice + 5;
+  return dp > 100 ? 100 : dp;
+}
+
+int set_priority(int priority, int pid)
+{
+  struct proc *p;
+  int old = -1;
+  for (p = proc; p < &proc[NPROC]; p++)
+  {
+    acquire(&p->lock);
+    if (p->pid == pid)
+    {
+      old = p->priority;
+      p->priority = priority;
+      p->rtime = 0;
+      p->wtime = 0;
+      release(&p->lock);
+      return old;
+    }
+    release(&p->lock);
+  }
+  return -1;
+}
+#endif
 
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -517,6 +572,55 @@ void scheduler(void)
     c->proc = 0;
     release(&chosen->lock);
 #endif
+#ifdef PBS
+    struct proc *chosen = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE)
+      {
+        if (chosen == 0)
+        {
+          chosen = p;
+          continue;
+        }
+        else if (_priority(chosen) > _priority(p))
+        {
+          release(&chosen->lock);
+          chosen = p;
+          continue;
+        }
+        else if (_priority(chosen) == _priority(p))
+        {
+          if (chosen->nrun > p->nrun)
+          {
+            release(&chosen->lock);
+            chosen = p;
+            continue;
+          }
+          else if (chosen->nrun == p->nrun)
+          {
+            if (chosen->intime > p->intime)
+            {
+              release(&chosen->lock);
+              chosen = p;
+              continue;
+            }
+          }
+        }
+      }
+      release(&p->lock);
+    }
+    if (!chosen)
+      continue;
+    chosen->state = RUNNING;
+    chosen->btime = ticks;
+    chosen->nrun++;
+    c->proc = chosen;
+    swtch(&c->context, &chosen->context);
+    c->proc = 0;
+    release(&chosen->lock);
+#endif
   }
 }
 
@@ -551,6 +655,16 @@ void yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
+#ifdef PBS
+  if (p->state == RUNNING)
+  {
+    p->rtime = ticks - p->btime;
+  }
+  else if (p->state == SLEEPING)
+  {
+    p->wtime = ticks - p->btime;
+  }
+#endif
   p->state = RUNNABLE;
   sched();
   release(&p->lock);
@@ -595,6 +709,10 @@ void sleep(void *chan, struct spinlock *lk)
 
   // Go to sleep.
   p->chan = chan;
+#ifdef PBS
+  p->rtime = ticks - p->btime;
+  p->btime = ticks;
+#endif
   p->state = SLEEPING;
 
   sched();
@@ -620,6 +738,9 @@ void wakeup(void *chan)
       acquire(&p->lock);
       if (p->state == SLEEPING && p->chan == chan)
       {
+#ifdef PBS
+        p->wtime = ticks - p->btime;
+#endif
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -642,7 +763,10 @@ int kill(int pid)
       p->killed = 1;
       if (p->state == SLEEPING)
       {
-        // Wake process from sleep().
+// Wake process from sleep().
+#ifdef PBS
+        p->wtime = ticks - p->btime;
+#endif
         p->state = RUNNABLE;
       }
       release(&p->lock);

@@ -104,3 +104,15 @@ sys_trace(void)
   trace(n);
   return 0;
 }
+
+uint64
+sys_set_priority(void)
+{
+#ifndef PBS
+  return -1;
+#endif
+  int priority, pid;
+  argint(0, &priority);
+  argint(1, &pid);
+  return set_priority(priority, pid);
+}
