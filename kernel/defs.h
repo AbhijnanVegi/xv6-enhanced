@@ -94,6 +94,7 @@ struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
 struct proc*    myproc();
 void            procinit(void);
+void            update_time(void);
 void            scheduler(void) __attribute__((noreturn));
 void            sched(void);
 void            sleep(void*, struct spinlock*);
@@ -106,7 +107,7 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 void            trace(int trace_mask);
 int             set_priority(int priority, int pid);
-
+int             waitx(uint64 addr,int* rtime, int* wtime);
 // swtch.S
 void            swtch(struct context*, struct context*);
 

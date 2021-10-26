@@ -128,6 +128,7 @@ found:
   p->pid = allocpid();
   p->state = USED;
   p->intime = ticks;
+  p->trtime = 0;
 
   // Allocate a trapframe page.
   if ((p->trapframe = (struct trapframe *)kalloc()) == 0)
@@ -157,8 +158,6 @@ found:
   p->priority = 60;
   p->nrun = 0;
   p->rtime = 0;
-  p->wtime = 0;
-  p->btime = 0;
 #endif
 
   return p;
@@ -184,7 +183,15 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->intime = 0;
+  p->trtime = 0;
+  p->endtime = 0;
   p->state = UNUSED;
+  #ifdef PBS
+  p->nrun = 0;
+  p->sched_time = 0;
+  p->rtime = 0;
+  p->schedend_time = 0;
+  #endif
 }
 
 // Create a user page table for a given process,
@@ -398,19 +405,10 @@ void exit(int status)
   acquire(&p->lock);
 
   // Update run times
-#ifdef PBS
-  if (p->state == RUNNING)
-  {
-    p->rtime = ticks - p->btime;
-  }
-  else if (p->state == SLEEPING)
-  {
-    p->wtime = ticks - p->btime;
-  }
-#endif
-
   p->xstate = status;
+  p->endtime = ticks;
   p->state = ZOMBIE;
+
 
   release(&wait_lock);
 
@@ -472,13 +470,71 @@ int wait(uint64 addr)
     sleep(p, &wait_lock); // DOC: wait-sleep
   }
 }
+
+int waitx(uint64 addr, int* rtime, int* wtime)
+{
+  struct proc *np;
+  int havekids, pid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+
+  for (;;)
+  {
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for (np = proc; np < &proc[NPROC]; np++)
+    {
+      if (np->parent == p)
+      {
+        // make sure the child isn't still in exit() or swtch().
+        acquire(&np->lock);
+
+        havekids = 1;
+        if (np->state == ZOMBIE)
+        {
+          // Found one.
+          pid = np->pid;
+          *rtime = np->trtime;
+          *wtime = np->endtime - np->intime - np->trtime;
+          if (addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
+                                   sizeof(np->xstate)) < 0)
+          {
+            release(&np->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          freeproc(np);
+          release(&np->lock);
+          release(&wait_lock);
+          return pid;
+        }
+        release(&np->lock);
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if (!havekids || p->killed)
+    {
+      release(&wait_lock);
+      return -1;
+    }
+
+    // Wait for a child to exit.
+    sleep(p, &wait_lock); // DOC: wait-sleep
+  }
+}
+
 #ifdef PBS
 int _priority(struct proc *p)
 {
   int nice;
   int dp;
+  int wtime;
+
+  wtime = p->schedend_time - p->sched_time - p->rtime;
   if (p->rtime)
-    nice = ((float)p->wtime / (p->rtime + p->wtime)) * 10;
+    nice = (wtime * 10 / (p->rtime + wtime));
   else
     nice = 5;
   dp = p->priority - nice + 5;
@@ -497,7 +553,6 @@ int set_priority(int priority, int pid)
       old = p->priority;
       p->priority = priority;
       p->rtime = 0;
-      p->wtime = 0;
       release(&p->lock);
       return old;
     }
@@ -506,6 +561,23 @@ int set_priority(int priority, int pid)
   return -1;
 }
 #endif
+
+void update_time(void)
+{
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++)
+  {
+    acquire(&p->lock);
+    if (p->state == RUNNING)
+    {
+      p->trtime++;
+      #ifdef PBS
+      p->rtime++;
+      #endif
+    }
+    release(&p->lock);
+  }
+}
 
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -614,8 +686,9 @@ void scheduler(void)
     if (!chosen)
       continue;
     chosen->state = RUNNING;
-    chosen->btime = ticks;
+    chosen->sched_time = ticks;
     chosen->nrun++;
+    chosen->rtime = 0;
     c->proc = chosen;
     swtch(&c->context, &chosen->context);
     c->proc = 0;
@@ -656,14 +729,7 @@ void yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
 #ifdef PBS
-  if (p->state == RUNNING)
-  {
-    p->rtime = ticks - p->btime;
-  }
-  else if (p->state == SLEEPING)
-  {
-    p->wtime = ticks - p->btime;
-  }
+  p->schedend_time = ticks;
 #endif
   p->state = RUNNABLE;
   sched();
@@ -709,10 +775,6 @@ void sleep(void *chan, struct spinlock *lk)
 
   // Go to sleep.
   p->chan = chan;
-#ifdef PBS
-  p->rtime = ticks - p->btime;
-  p->btime = ticks;
-#endif
   p->state = SLEEPING;
 
   sched();
@@ -739,7 +801,7 @@ void wakeup(void *chan)
       if (p->state == SLEEPING && p->chan == chan)
       {
 #ifdef PBS
-        p->wtime = ticks - p->btime;
+        p->schedend_time = ticks;
 #endif
         p->state = RUNNABLE;
       }
@@ -765,7 +827,7 @@ int kill(int pid)
       {
 // Wake process from sleep().
 #ifdef PBS
-        p->wtime = ticks - p->btime;
+        p->schedend_time = ticks;
 #endif
         p->state = RUNNABLE;
       }
@@ -826,6 +888,12 @@ void procdump(void)
   char *state;
 
   printf("\n");
+  #if defined RR || defined FCFS
+  printf("PID State Name\n");
+#endif
+#ifdef PBS
+  printf("PID Priority State Name rtime wtime nrun\n");
+#endif
   for (p = proc; p < &proc[NPROC]; p++)
   {
     if (p->state == UNUSED)
@@ -834,7 +902,16 @@ void procdump(void)
       state = states[p->state];
     else
       state = "???";
+    #ifdef RR 
     printf("%d %s %s", p->pid, state, p->name);
+    #endif
+    #ifdef FCFS 
+    printf("%d %s %s", p->pid, state, p->name);
+    #endif
+    #ifdef PBS
+    int wtime = ticks - p->intime - p->trtime;
+    printf("%d %d %s %s %d %d %d", p->pid, _priority(p), state, p->name, p->trtime, wtime, p->nrun);
+    #endif
     printf("\n");
   }
 }

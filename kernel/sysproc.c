@@ -39,6 +39,26 @@ sys_wait(void)
 }
 
 uint64
+sys_waitx(void)
+{
+  uint64 p, raddr, waddr;
+  int rtime, wtime;
+  if(argaddr(0, &p) < 0)
+    return -1;
+  if (argaddr(1, &raddr) < 0)
+    return -1;
+  if (argaddr(2, &waddr) < 0)
+    return -1;
+  int ret = waitx(p,&rtime,&wtime);
+  struct proc *proc = myproc();
+  if (copyout(proc->pagetable, raddr, (char*)&rtime , sizeof(int)) < 0)
+    return -1;
+  if (copyout(proc->pagetable, waddr, (char*)&wtime , sizeof(int)) < 0)
+    return -1;
+  return ret;
+}
+
+uint64
 sys_sbrk(void)
 {
   int addr;

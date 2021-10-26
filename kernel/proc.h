@@ -107,12 +107,14 @@ struct proc {
   char name[16];               // Process name (debugging)
   int trace_mask;              // Syscall bits to be traced
   // Scheduler requirements
-  int intime;                  // Time added to proc lis
+  int intime;                  // Time added to proc list
+  int trtime;                  // Total run time
+  int endtime;                 // Time when proc should be removed
 #ifdef PBS
   int priority;                // Process priority
   int nrun;                    // Number of times process scheduled
+  int sched_time;              // Scheduled time
   int rtime;                   // Time spent running
-  int wtime;                   // Time spent waiting
-  int btime;                   // Time at which process transitioned to R or S
+  int schedend_time;           // Time at which process was scheduled out
 #endif
 };

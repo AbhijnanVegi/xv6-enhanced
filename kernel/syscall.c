@@ -105,6 +105,7 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);
+extern uint64 sys_waitx(void);
 extern uint64 sys_set_priority();
 
 static uint64 (*syscalls[])(void) = {
@@ -130,6 +131,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace,
+[SYS_waitx]   sys_waitx,
 [SYS_set_priority] sys_set_priority,
 };
 
@@ -183,6 +185,8 @@ struct syscall_info syscall_infos[] = {
     { 1, "close" },
     [SYS_trace]
     { 1, "trace" },
+    [SYS_waitx]
+    { 3, "waitx" },
     [SYS_set_priority]
     { 1, "set_priority" },
 };
