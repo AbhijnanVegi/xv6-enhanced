@@ -18,3 +18,11 @@ This document describes the implementation of the specifications as mentioned in
 - Edited `allocproc()` to initialise the new variable created above
 - Edited `scheduler()` to run the process with the lowest time created
 - Edited `kerneltrap()` in kernel/trap.c to disable premption with timer interrupts
+
+### PBS Policy
+- Edited `struct proc` to store the priority, time dispatched, runtime during allocated time, and time when it ready to run
+- Edited `allocproc()` to initialise the new variables created above
+- Edited `scheduler()` to run the process with the highest priority
+- Edited `clockintr()` to track runtime
+- Added a new sycall `set_priority` to change the priority of a process
+- Edited `wakeup()`, `yield()`, `kill()` to record when process finished running/waiting

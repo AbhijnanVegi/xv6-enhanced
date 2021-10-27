@@ -77,9 +77,9 @@ void usertrap(void)
 
   if (p->killed)
     exit(-1);
-#ifdef RR
+#if defined RR || defined MLFQ
   // give up the CPU if this is a timer interrupt.
-  if (which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  if (which_dev == 2)
     yield();
 #endif
 
@@ -150,10 +150,21 @@ void kerneltrap()
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
   }
-#ifdef RR
+
   // give up the CPU if this is a timer interrupt.
   if (which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  #ifdef RR
     yield();
+  #endif
+  #ifdef MLFQ
+  {
+    struct proc* p = myproc();
+    if (p->change_queue <= 0)
+    {
+      p->level = p->level +1 != NMLFQ? p->level + 1: p->level;
+    }
+    yield();
+  }
 #endif
 
   // the yield() may have caused some traps to occur,

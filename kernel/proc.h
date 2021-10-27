@@ -117,4 +117,26 @@ struct proc {
   int rtime;                   // Time spent running
   int schedend_time;           // Time at which process was scheduled out
 #endif
+#ifdef MLFQ
+  int level;
+  int in_queue;
+  int change_queue;
+  int nrun;
+  int q_enter;
+  int qrtime[NMLFQ];
+#endif
 };
+#ifdef MLFQ
+struct Queue
+{
+  int head, tail;
+  struct proc *array[NPROC + 1];
+  int size;
+};
+
+void push(struct Queue *list, struct proc *element);
+void pop(struct Queue *list);
+struct proc *front(struct Queue *list);
+void qerase(struct Queue *list, int pid);
+void ageing(void);
+#endif
