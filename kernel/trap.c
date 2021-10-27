@@ -161,7 +161,7 @@ void kerneltrap()
     struct proc* p = myproc();
     if (p->change_queue <= 0)
     {
-      p->level = p->level +1 != NMLFQ? p->level + 1: p->level;
+      p->priority = p->priority +1 != NMLFQ? p->priority + 1: p->priority;
     }
     yield();
   }

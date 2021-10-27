@@ -117,7 +117,7 @@ struct proc {
   int schedend_time;           // Time at which process was scheduled out
 #endif
 #ifdef MLFQ
-  int level;
+  int priority;
   int in_queue;
   int change_queue;
   int nrun;

@@ -26,3 +26,6 @@ This document describes the implementation of the specifications as mentioned in
 - Edited `clockintr()` to track runtime
 - Added a new sycall `set_priority` to change the priority of a process
 - Edited `wakeup()`, `yield()`, `kill()` to record when process finished running/waiting
+
+### MLFQ Policy
+- Edited `struct proc` 

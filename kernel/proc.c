@@ -170,7 +170,7 @@ found:
   p->rtime = 0;
 #endif
 #ifdef MLFQ
-  p->level = 0;
+  p->priority = 0;
   p->in_queue = 0;
   p->change_queue = 1;
   p->nrun = 0;
@@ -595,7 +595,7 @@ void update_time(void)
       p->rtime++;
 #endif
 #ifdef MLFQ
-      p->qrtime[p->level]++;
+      p->qrtime[p->priority]++;
       p->change_queue--;
 #endif
     }
@@ -729,11 +729,11 @@ void scheduler(void)
         p->q_enter = ticks;
         if (p->in_queue)
         {
-          qrm(&mlfq[p->level], p->pid);
+          qrm(&mlfq[p->priority], p->pid);
           p->in_queue = 0;
         }
-        if (p->level != 0)
-          p->level--;
+        if (p->priority != 0)
+          p->priority--;
       }
       release(&p->lock);
     }
@@ -742,7 +742,7 @@ void scheduler(void)
       acquire(&p->lock);
       if (p->state == RUNNABLE && p->in_queue == 0)
       {
-        qpush(&mlfq[p->level], p);
+        qpush(&mlfq[p->priority], p);
         p->in_queue = 1;
       }
       release(&p->lock);
@@ -769,9 +769,10 @@ void scheduler(void)
     }
     if (!chosen)
       continue;
-    chosen->change_queue = 1 << chosen->level;
+    chosen->change_queue = 1 << chosen->priority;
     chosen->state = RUNNING;
     c->proc = chosen;
+    chosen->nrun++;
     swtch(&c->context, &chosen->context);
     c->proc = 0;
     chosen->q_enter = ticks;
@@ -1011,7 +1012,7 @@ void procdump(void)
 #endif
 #ifdef MLFQ
     int wtime = ticks - p->q_enter;
-    printf("%d %d %s %d %d %d %d %d %d %d %d", p->pid, p->level, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
+    printf("%d %d %s %d %d %d %d %d %d %d %d",p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
 #endif
     printf("\n");
   }
