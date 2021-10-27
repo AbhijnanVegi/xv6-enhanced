@@ -159,7 +159,7 @@ void kerneltrap()
   #ifdef MLFQ
   {
     struct proc* p = myproc();
-    if (p->change_queue <= 0)
+    if (p->quanta <= 0)
     {
       p->priority = p->priority +1 != NMLFQ? p->priority + 1: p->priority;
     }

@@ -172,7 +172,7 @@ found:
 #ifdef MLFQ
   p->priority = 0;
   p->in_queue = 0;
-  p->change_queue = 1;
+  p->quanta = 1;
   p->nrun = 0;
   p->q_enter = ticks;
   for (int i = 0; i < NMLFQ; i++)
@@ -596,7 +596,7 @@ void update_time(void)
 #endif
 #ifdef MLFQ
       p->qrtime[p->priority]++;
-      p->change_queue--;
+      p->quanta--;
 #endif
     }
     release(&p->lock);
@@ -769,7 +769,7 @@ void scheduler(void)
     }
     if (!chosen)
       continue;
-    chosen->change_queue = 1 << chosen->priority;
+    chosen->quanta = 1 << chosen->priority;
     chosen->state = RUNNING;
     c->proc = chosen;
     chosen->nrun++;

@@ -119,7 +119,7 @@ struct proc {
 #ifdef MLFQ
   int priority;
   int in_queue;
-  int change_queue;
+  int quanta;
   int nrun;
   int q_enter;
   int qrtime[NMLFQ];

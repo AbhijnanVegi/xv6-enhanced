@@ -28,4 +28,16 @@ This document describes the implementation of the specifications as mentioned in
 - Edited `wakeup()`, `yield()`, `kill()` to record when process finished running/waiting
 
 ### MLFQ Policy
-- Edited `struct proc` 
+- Edited `struct proc` to store the priority, allocated time, times dispatched, time added to queue, and time spent in each queue
+- Edited `allocproc()` to initialise the new variables created above
+- Created 5 queues of different priority
+- Edited `scheduler()` to run the process with the highest priority and process aging and adding processes to respective queues
+- Edited `clockintr()` to track runtime
+
+Answer to question in specification 2: A malicious process can exploit the given condition by yielding the CPU before finishing its allocated time, retaining its priority and blocking lower priority processes from running unless aging is implemented.
+
+## Specification 3: procdump
+- Edited `procdump()` in kernel/proc.c to print data from the process struct
+
+## Additional Implementations
+- `waitx()` syscall is implemented that funtions similar to `wait()` but also returns the runtime and wait time of the child process
