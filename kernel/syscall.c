@@ -195,18 +195,23 @@ void
 syscall(void)
 {
   int num;
+  uint64 arg1;
   struct proc *p = myproc();
 
   num = p->trapframe->a7;
   if (num > 0 && num < NELEM(syscalls) && syscalls[num])
-  {
+  { 
+    arg1 = argraw(0);
     p->trapframe->a0 = syscalls[num]();
     if (p->trace_mask & (1 << num))
     {
       printf("\n%d: syscall %s (",p->pid,syscall_infos[num].name);
       for (int i = 0; i < syscall_infos[num].argnum; i++)
       {
-        printf("%d ",argraw(i));
+        uint64 n = argraw(i);
+        if (i == 0)
+          n = arg1;
+        printf("%d ", n);
       }
       printf(") %d\n", p->trapframe->a0);
     }

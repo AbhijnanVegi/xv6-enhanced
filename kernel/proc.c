@@ -10,11 +10,14 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+#ifdef MLFQ
+struct Queue mlfq[NMLFQ];
+#endif
+
 struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
-struct spinlock proc_table_lock;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -51,12 +54,19 @@ void procinit(void)
 
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  initlock(&proc_table_lock, "proc_table_lock");
   for (p = proc; p < &proc[NPROC]; p++)
   {
     initlock(&p->lock, "proc");
     p->kstack = KSTACK((int)(p - proc));
   }
+#ifdef MLFQ
+  for (int i = 0; i < NMLFQ; i++)
+  {
+    mlfq[i].size = 0;
+    mlfq[i].head = 0;
+    mlfq[i].tail = 0;
+  }
+#endif
 }
 
 // Must be called with interrupts disabled,
@@ -159,6 +169,16 @@ found:
   p->nrun = 0;
   p->rtime = 0;
 #endif
+#ifdef MLFQ
+  p->level = 0;
+  p->in_queue = 0;
+  p->change_queue = 1;
+  p->nrun = 0;
+  p->q_enter = ticks;
+  for (int i = 0; i < NMLFQ; i++)
+    p->qrtime[i] = 0;
+
+#endif
 
   return p;
 }
@@ -186,12 +206,12 @@ freeproc(struct proc *p)
   p->trtime = 0;
   p->endtime = 0;
   p->state = UNUSED;
-  #ifdef PBS
+#ifdef PBS
   p->nrun = 0;
   p->sched_time = 0;
   p->rtime = 0;
   p->schedend_time = 0;
-  #endif
+#endif
 }
 
 // Create a user page table for a given process,
@@ -409,7 +429,6 @@ void exit(int status)
   p->endtime = ticks;
   p->state = ZOMBIE;
 
-
   release(&wait_lock);
 
   // Jump into the scheduler, never to return.
@@ -471,7 +490,7 @@ int wait(uint64 addr)
   }
 }
 
-int waitx(uint64 addr, int* rtime, int* wtime)
+int waitx(uint64 addr, int *rtime, int *wtime)
 {
   struct proc *np;
   int havekids, pid;
@@ -538,6 +557,7 @@ int _priority(struct proc *p)
   else
     nice = 5;
   dp = p->priority - nice + 5;
+  dp = dp < 0 ? 0 : dp;
   return dp > 100 ? 100 : dp;
 }
 
@@ -571,9 +591,13 @@ void update_time(void)
     if (p->state == RUNNING)
     {
       p->trtime++;
-      #ifdef PBS
+#ifdef PBS
       p->rtime++;
-      #endif
+#endif
+#ifdef MLFQ
+      p->qrtime[p->level]++;
+      p->change_queue--;
+#endif
     }
     release(&p->lock);
   }
@@ -692,6 +716,65 @@ void scheduler(void)
     c->proc = chosen;
     swtch(&c->context, &chosen->context);
     c->proc = 0;
+    release(&chosen->lock);
+#endif
+#ifdef MLFQ
+    struct proc *chosen = 0;
+    // Reset priority for old processes /Aging/
+    for (struct proc *p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE && ticks - p->q_enter >= AGETICK)
+      {
+        p->q_enter = ticks;
+        if (p->in_queue)
+        {
+          qrm(&mlfq[p->level], p->pid);
+          p->in_queue = 0;
+        }
+        if (p->level != 0)
+          p->level--;
+      }
+      release(&p->lock);
+    }
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE && p->in_queue == 0)
+      {
+        qpush(&mlfq[p->level], p);
+        p->in_queue = 1;
+      }
+      release(&p->lock);
+    }
+
+    for (int level = 0; level < NMLFQ; level++)
+    {
+      while (mlfq[level].size)
+      {
+        struct proc *p = front(&mlfq[level]);
+        acquire(&p->lock);
+        qpop(&mlfq[level]);
+        p->in_queue = 0;
+        if (p->state == RUNNABLE)
+        {
+          p->q_enter = ticks;
+          chosen = p;
+          break;
+        }
+        release(&p->lock);
+      }
+      if (chosen)
+        break;
+    }
+    if (!chosen)
+      continue;
+    chosen->change_queue = 1 << chosen->level;
+    chosen->state = RUNNING;
+    c->proc = chosen;
+    swtch(&c->context, &chosen->context);
+    c->proc = 0;
+    chosen->q_enter = ticks;
     release(&chosen->lock);
 #endif
   }
@@ -888,11 +971,17 @@ void procdump(void)
   char *state;
 
   printf("\n");
-  #if defined RR || defined FCFS
+#ifdef RR
   printf("PID State Name\n");
+#endif
+#ifdef FCFS
+  printf("PID State Name ctime\n");
 #endif
 #ifdef PBS
   printf("PID Priority State Name rtime wtime nrun\n");
+#endif
+#ifdef MLFQ
+  printf("PID Priority State rtime wtime nrun q0 q1 q2 q3 q4\n");
 #endif
   for (p = proc; p < &proc[NPROC]; p++)
   {
@@ -902,16 +991,20 @@ void procdump(void)
       state = states[p->state];
     else
       state = "???";
-    #ifdef RR 
+#ifdef RR
     printf("%d %s %s", p->pid, state, p->name);
-    #endif
-    #ifdef FCFS 
-    printf("%d %s %s", p->pid, state, p->name);
-    #endif
-    #ifdef PBS
+#endif
+#ifdef FCFS
+    printf("%d %s %s %d", p->pid, state, p->name, p->intime);
+#endif
+#ifdef PBS
     int wtime = ticks - p->intime - p->trtime;
     printf("%d %d %s %s %d %d %d", p->pid, _priority(p), state, p->name, p->trtime, wtime, p->nrun);
-    #endif
+#endif
+#ifdef MLFQ
+    int wtime = ticks - p->q_enter;
+    printf("%d %d %s %d %d %d %d %d %d %d %d", p->pid, p->level, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
+#endif
     printf("\n");
   }
 }
@@ -922,3 +1015,68 @@ void trace(int trace_mask)
   struct proc *p = myproc();
   p->trace_mask = trace_mask;
 }
+
+// Queue utils
+#ifdef MLFQ
+void qpush(struct Queue *q, struct proc *element)
+{
+  if (q->size == NPROC)
+  {
+    panic("Proccess limit exceeded");
+  }
+
+  q->procs[q->tail] = element;
+  q->tail++;
+  if (q->tail == NPROC + 1)
+  {
+    q->tail = 0;
+  }
+  q->size++;
+}
+
+void qpop(struct Queue *q)
+{
+  if (q->size == 0)
+  {
+    panic("Empty queue");
+  }
+  q->head++;
+  if (q->head == NPROC + 1)
+  {
+    q->head = 0;
+  }
+
+  q->size--;
+}
+
+struct proc *
+front(struct Queue *q)
+{
+  if (q->head == q->tail)
+  {
+    return 0;
+  }
+  return q->procs[q->head];
+}
+
+void qrm(struct Queue *q, int pid)
+{
+  for (int curr = q->head; curr != q->tail; curr = (curr + 1) % (NPROC + 1))
+  {
+    if (q->procs[curr]->pid == pid)
+    {
+      struct proc *temp = q->procs[curr];
+      q->procs[curr] = q->procs[(curr + 1) % (NPROC + 1)];
+      q->procs[(curr + 1) % (NPROC + 1)] = temp;
+    }
+  }
+
+  q->tail--;
+  q->size--;
+  if (q->tail < 0)
+  {
+    q->tail = NPROC;
+  }
+}
+
+#endif

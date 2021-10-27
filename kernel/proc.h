@@ -27,7 +27,6 @@ struct cpu {
 };
 
 extern struct cpu cpus[NCPU];
-
 // per-process data for the trap handling code in trampoline.S.
 // sits in a page by itself just under the trampoline page in the
 // user page table. not specially mapped in the kernel page table.
@@ -117,4 +116,25 @@ struct proc {
   int rtime;                   // Time spent running
   int schedend_time;           // Time at which process was scheduled out
 #endif
+#ifdef MLFQ
+  int level;
+  int in_queue;
+  int change_queue;
+  int nrun;
+  int q_enter;
+  int qrtime[NMLFQ];
+#endif
 };
+#ifdef MLFQ
+struct Queue
+{
+  int head, tail;
+  struct proc *procs[NPROC + 1];
+  int size;
+};
+
+void qpush(struct Queue *q, struct proc *element);
+void qpop(struct Queue *q);
+struct proc *front(struct Queue *q);
+void qrm(struct Queue *q, int pid);
+#endif
