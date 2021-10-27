@@ -552,19 +552,19 @@ int _priority(struct proc *p)
   int wtime;
 
   wtime = p->schedend_time - p->sched_time - p->rtime;
-  if (p->rtime)
+  if (p->rtime + wtime != 0)
     nice = (wtime * 10 / (p->rtime + wtime));
   else
     nice = 5;
   dp = p->priority - nice + 5;
-  dp = dp < 0 ? 0 : dp;
-  return dp > 100 ? 100 : dp;
+  dp = (dp < 0) ? 0 : dp;
+  return (dp > 100) ? 100 : dp;
 }
 
 int set_priority(int priority, int pid)
 {
   struct proc *p;
-  int old = -1;
+  int old = 0;
   for (p = proc; p < &proc[NPROC]; p++)
   {
     acquire(&p->lock);
@@ -999,7 +999,15 @@ void procdump(void)
 #endif
 #ifdef PBS
     int wtime = ticks - p->intime - p->trtime;
-    printf("%d %d %s %s %d %d %d", p->pid, _priority(p), state, p->name, p->trtime, wtime, p->nrun);
+    int nice;
+    if (p->rtime + wtime != 0)
+      nice = (wtime * 10 / (p->rtime + wtime));
+    else
+      nice = 5;
+    int dp = p->priority - nice + 5;
+    dp = (dp < 0) ? 0 : dp;
+    dp = (dp > 100) ? 100 : dp;
+    printf("%d %d %s %s %d %d %d", p->pid, dp, state, p->name, p->trtime, wtime, p->nrun);
 #endif
 #ifdef MLFQ
     int wtime = ticks - p->q_enter;
