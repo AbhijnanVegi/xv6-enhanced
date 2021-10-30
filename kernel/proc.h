@@ -112,9 +112,8 @@ struct proc {
 #ifdef PBS
   int priority;                // Process priority
   int nrun;                    // Number of times process scheduled
-  int sched_time;              // Scheduled time
   int rtime;                   // Time spent running
-  int schedend_time;           // Time at which process was scheduled out
+  int wtime;                   // Time spent waiting
 #endif
 #ifdef MLFQ
   int priority;

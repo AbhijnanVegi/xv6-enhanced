@@ -162,8 +162,8 @@ void kerneltrap()
     if (p->quanta <= 0)
     {
       p->priority = p->priority +1 != NMLFQ? p->priority + 1: p->priority;
+      yield();
     }
-    yield();
   }
 #endif
 

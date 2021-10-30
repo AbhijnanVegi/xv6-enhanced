@@ -19,7 +19,7 @@ int main() {
           if (n < IO) {
             sleep(200); // IO bound processes
           } else {
-            for (int i = 0; i < 1000000000; i++) {}; // CPU bound process
+            for (int i = 0; i < 1000000000; i++); // CPU bound process
           }
           printf("Process %d finished\n", n+4);
           exit(0);
