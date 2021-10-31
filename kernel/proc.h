@@ -120,7 +120,7 @@ struct proc {
   int in_queue;
   int quanta;
   int nrun;
-  int q_enter;
+  int qitime;
   int qrtime[NMLFQ];
 #endif
 };
@@ -134,6 +134,6 @@ struct Queue
 
 void qpush(struct Queue *q, struct proc *element);
 void qpop(struct Queue *q);
-struct proc *front(struct Queue *q);
+struct proc *top(struct Queue *q);
 void qrm(struct Queue *q, int pid);
 #endif

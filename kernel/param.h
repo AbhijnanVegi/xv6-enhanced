@@ -12,4 +12,4 @@
 #define FSSIZE       1000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define NMLFQ        5    // max number of processes in the MLFQ
-#define AGETICK      64   // time slice for aging
+#define OLDAGE       64   // time slice for aging

@@ -174,7 +174,7 @@ found:
   p->in_queue = 0;
   p->quanta = 1;
   p->nrun = 0;
-  p->q_enter = ticks;
+  p->qitime = ticks;
   for (int i = 0; i < NMLFQ; i++)
     p->qrtime[i] = 0;
 
@@ -728,9 +728,9 @@ void scheduler(void)
     // Reset priority for old processes /Aging/
     for (p = proc; p < &proc[NPROC]; p++)
     {
-      if (p->state == RUNNABLE && ticks - p->q_enter >= AGETICK)
+      if (p->state == RUNNABLE && ticks - p->qitime >= OLDAGE)
       {
-        p->q_enter = ticks;
+        p->qitime = ticks;
         if (p->in_queue)
         {
           qrm(&mlfq[p->priority], p->pid);
@@ -754,13 +754,13 @@ void scheduler(void)
     {
       while (mlfq[level].size)
       {
-        p = front(&mlfq[level]);
+        p = top(&mlfq[level]);
         acquire(&p->lock);
         qpop(&mlfq[level]);
         p->in_queue = 0;
         if (p->state == RUNNABLE)
         {
-          p->q_enter = ticks;
+          p->qitime = ticks;
           chosen = p;
           break;
         }
@@ -777,7 +777,7 @@ void scheduler(void)
     chosen->nrun++;
     swtch(&c->context, &chosen->context);
     c->proc = 0;
-    chosen->q_enter = ticks;
+    chosen->qitime = ticks;
     release(&chosen->lock);
 #endif
   }
@@ -996,7 +996,7 @@ void procdump(void)
     printf("%d %d %s %s %d %d %d", p->pid, _priority(p), state, p->name, p->trtime, wtime, p->nrun);
 #endif
 #ifdef MLFQ
-    int wtime = ticks - p->q_enter;
+    int wtime = ticks - p->qitime;
     printf("%d %d %s %d %d %d %d %d %d %d %d", p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
 #endif
     printf("\n");
@@ -1044,7 +1044,7 @@ void qpop(struct Queue *q)
 }
 
 struct proc *
-front(struct Queue *q)
+top(struct Queue *q)
 {
   if (q->head == q->tail)
   {
