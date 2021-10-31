@@ -132,8 +132,8 @@ struct Queue
   int size;
 };
 
+struct proc *top(struct Queue *q);
 void qpush(struct Queue *q, struct proc *element);
 void qpop(struct Queue *q);
-struct proc *top(struct Queue *q);
 void qrm(struct Queue *q, int pid);
 #endif

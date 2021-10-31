@@ -1012,45 +1012,33 @@ void trace(int trace_mask)
 
 // Queue utils
 #ifdef MLFQ
+struct proc *top(struct Queue *q)
+{
+  if (q->head == q->tail)
+    return 0;
+  return q->procs[q->head];
+}
+
 void qpush(struct Queue *q, struct proc *element)
 {
   if (q->size == NPROC)
-  {
     panic("Proccess limit exceeded");
-  }
 
   q->procs[q->tail] = element;
   q->tail++;
   if (q->tail == NPROC + 1)
-  {
     q->tail = 0;
-  }
   q->size++;
 }
 
 void qpop(struct Queue *q)
 {
   if (q->size == 0)
-  {
     panic("Empty queue");
-  }
   q->head++;
   if (q->head == NPROC + 1)
-  {
     q->head = 0;
-  }
-
   q->size--;
-}
-
-struct proc *
-top(struct Queue *q)
-{
-  if (q->head == q->tail)
-  {
-    return 0;
-  }
-  return q->procs[q->head];
 }
 
 void qrm(struct Queue *q, int pid)
@@ -1068,9 +1056,6 @@ void qrm(struct Queue *q, int pid)
   q->tail--;
   q->size--;
   if (q->tail < 0)
-  {
     q->tail = NPROC;
-  }
 }
-
 #endif
