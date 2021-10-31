@@ -730,7 +730,7 @@ void scheduler(void)
 #ifdef MLFQ
     struct proc *chosen = 0;
     // Reset priority for old processes /Aging/
-    for (struct proc *p = proc; p < &proc[NPROC]; p++)
+    for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
       if (p->state == RUNNABLE && ticks - p->q_enter >= AGETICK)
@@ -743,16 +743,6 @@ void scheduler(void)
         }
         if (p->priority != 0)
           p->priority--;
-      }
-      release(&p->lock);
-    }
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE && p->in_queue == 0)
-      {
-        qpush(&mlfq[p->priority], p);
-        p->in_queue = 1;
       }
       release(&p->lock);
     }
