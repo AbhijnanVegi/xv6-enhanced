@@ -601,6 +601,13 @@ void update_time(void)
       p->wtime++;
     }
 #endif
+#ifdef MLFQ
+    else if (p->state == RUNNABLE && p->in_queue == 0)
+    {
+      qpush(&mlfq[p->priority], p);
+      p->in_queue = 1;
+    }
+#endif
     release(&p->lock);
   }
 }
@@ -698,7 +705,7 @@ void scheduler(void)
           }
           else if (chosen->nrun == p->nrun)
           {
-            if (chosen->intime > p->intime)
+            if (chosen->intime < p->intime)
             {
               release(&chosen->lock);
               chosen = p;
@@ -745,7 +752,6 @@ void scheduler(void)
       if (p->state == RUNNABLE && p->in_queue == 0)
       {
         qpush(&mlfq[p->priority], p);
-        p->q_enter = ticks;
         p->in_queue = 1;
       }
       release(&p->lock);
@@ -778,6 +784,7 @@ void scheduler(void)
     chosen->nrun++;
     swtch(&c->context, &chosen->context);
     c->proc = 0;
+    chosen->q_enter = ticks;
     release(&chosen->lock);
 #endif
   }
@@ -997,7 +1004,7 @@ void procdump(void)
 #endif
 #ifdef MLFQ
     int wtime = ticks - p->q_enter;
-    printf("%d %d %s %d %d %d %d %d %d %d %d",p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
+    printf("%d %d %s %d %d %d %d %d %d %d %d",p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4] );
 #endif
     printf("\n");
   }

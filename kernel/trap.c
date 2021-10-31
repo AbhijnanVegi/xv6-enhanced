@@ -77,12 +77,22 @@ void usertrap(void)
 
   if (p->killed)
     exit(-1);
-#if defined RR || defined MLFQ
+#if defined RR 
   // give up the CPU if this is a timer interrupt.
   if (which_dev == 2)
     yield();
 #endif
-
+#ifdef MLFQ
+  if (which_dev == 2)
+  {
+    struct proc* p = myproc();
+    if (p->quanta <= 0)
+    {
+      p->priority = p->priority +1 != NMLFQ? p->priority + 1: p->priority;
+      yield();
+    }
+  }
+#endif
   usertrapret();
 }
 
@@ -177,9 +187,9 @@ void clockintr()
 {
   acquire(&tickslock);
   ticks++;
+  update_time();
   wakeup(&ticks);
   release(&tickslock);
-  update_time();
 }
 
 // check if it's an external interrupt or software interrupt,
