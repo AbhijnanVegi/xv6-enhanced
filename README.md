@@ -49,10 +49,10 @@ This document describes the implementation of the specifications as mentioned in
 
   |         Scheduler         | <rtime> | <wtime> |
   | :-----------------------: | :-----: | :-----: |
-  |        Round robin        |   160   |   15    |
-  |  First come first serve   |   143   |   31    |
-  | Priority based scheduler  |   132   |   16    |
-  | Multilevel Feedback queue |   151   |   15    |
+  |        Round robin        |   15    |   160   |
+  |  First come first serve   |   31    |   143   |
+  | Priority based scheduler  |   16    |   132   |
+  | Multilevel Feedback queue |   15    |   151   |
 
   The above results are obtained by running `schedulertest` on a single CPU.
 

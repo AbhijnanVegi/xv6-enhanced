@@ -10,6 +10,9 @@ struct spinlock tickslock;
 uint ticks;
 
 extern char trampoline[], uservec[], userret[];
+#ifdef MLFQ
+extern struct Queue mlfq[NMLFQ];
+#endif
 
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
@@ -90,6 +93,13 @@ void usertrap(void)
     {
       p->priority = p->priority +1 != NMLFQ? p->priority + 1: p->priority;
       yield();
+    }
+    for (int i = 0; i < p->priority;i++)
+    {
+      if(mlfq[i].size)
+      {
+        yield();
+      }
     }
   }
 #endif
@@ -173,6 +183,13 @@ void kerneltrap()
     {
       p->priority = p->priority +1 != NMLFQ? p->priority + 1: p->priority;
       yield();
+    }
+    for (int i = 0; i < p->priority;i++)
+    {
+      if(mlfq[i].size)
+      {
+        yield();
+      }
     }
   }
 #endif
