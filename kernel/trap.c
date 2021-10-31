@@ -83,7 +83,7 @@ void usertrap(void)
     yield();
 #endif
 #ifdef MLFQ
-  if (which_dev == 2)
+  if (which_dev == 2 && myproc() && myproc()->state == RUNNING)
   {
     struct proc* p = myproc();
     if (p->quanta <= 0)
