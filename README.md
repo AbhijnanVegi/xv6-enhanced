@@ -57,4 +57,6 @@ This document describes the implementation of the specifications as mentioned in
   The above results are obtained by running `schedulertest` on a single CPU.
 
 ## Bonus
-
+The following plot is obtained for cpu bound processes with the time limit for aging being 64 ticks
+![plot](plot.png)
+IO bound processes aren't included as they remain in queue 0 for the entire time.
