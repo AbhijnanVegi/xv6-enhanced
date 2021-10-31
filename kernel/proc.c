@@ -607,6 +607,17 @@ void update_time(void)
       qpush(&mlfq[p->priority], p);
       p->in_queue = 1;
     }
+    if (p->state == RUNNABLE && ticks - p->q_enter >= AGETICK)
+    {
+      p->q_enter = ticks;
+      if (p->in_queue)
+      {
+        qrm(&mlfq[p->priority], p->pid);
+        p->in_queue = 0;
+      }
+      if (p->priority != 0)
+        p->priority--;
+    }
 #endif
     release(&p->lock);
   }
@@ -730,28 +741,11 @@ void scheduler(void)
 #ifdef MLFQ
     struct proc *chosen = 0;
     // Reset priority for old processes /Aging/
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE && ticks - p->q_enter >= AGETICK)
-      {
-        p->q_enter = ticks;
-        if (p->in_queue)
-        {
-          qrm(&mlfq[p->priority], p->pid);
-          p->in_queue = 0;
-        }
-        if (p->priority != 0)
-          p->priority--;
-      }
-      release(&p->lock);
-    }
-
     for (int level = 0; level < NMLFQ; level++)
     {
       while (mlfq[level].size)
       {
-        struct proc *p = front(&mlfq[level]);
+        p = front(&mlfq[level]);
         acquire(&p->lock);
         qpop(&mlfq[level]);
         p->in_queue = 0;
@@ -994,7 +988,7 @@ void procdump(void)
 #endif
 #ifdef MLFQ
     int wtime = ticks - p->q_enter;
-    printf("%d %d %s %d %d %d %d %d %d %d %d",p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4] );
+    printf("%d %d %s %d %d %d %d %d %d %d %d", p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
 #endif
     printf("\n");
   }

@@ -23,21 +23,24 @@ This document describes the implementation of the specifications as mentioned in
 - Edited `struct proc` to store the priority, time dispatched, runtime during allocated time, and time when it ready to run
 - Edited `allocproc()` to initialise the new variables created above
 - Edited `scheduler()` to run the process with the highest priority
-- Edited `clockintr()` to track runtime
+- Edited `clockintr()` to track runtime and wait time
 - Added a new sycall `set_priority` to change the priority of a process
-- Edited `wakeup()`, `yield()`, `kill()` to record when process finished running/waiting
 
 ### MLFQ Policy
 - Edited `struct proc` to store the priority, allocated time, times dispatched, time added to queue, and time spent in each queue
 - Edited `allocproc()` to initialise the new variables created above
 - Created 5 queues of different priority
-- Edited `scheduler()` to run the process with the highest priority and process aging and adding processes to respective queues
-- Edited `clockintr()` to track runtime
+- Edited `scheduler()` to run the process with the highest priority and handle aging of processes
+- Edited `clockintr()` to track runtime and
+- Edited `kerneltrap()` and `usertrap()` to yield when process has exhausted its time slice
 
-Answer to question in specification 2: A malicious process can exploit the given condition by yielding the CPU before finishing its allocated time, retaining its priority and blocking lower priority processes from running unless aging is implemented.
+
 
 ## Specification 3: procdump
 - Edited `procdump()` in kernel/proc.c to print data from the process struct
 
 ## Additional Implementations
 - `waitx()` syscall is implemented that funtions similar to `wait()` but also returns the runtime and wait time of the child process
+
+## Specification 4: 
+- Answer to question in specification 2: A malicious process can exploit the given condition by yielding the CPU before finishing its allocated time, retaining its priority and blocking lower priority processes from running unless aging is implemented.
