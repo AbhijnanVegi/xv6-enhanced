@@ -207,10 +207,10 @@ freeproc(struct proc *p)
   p->endtime = 0;
   p->state = UNUSED;
 #ifdef PBS
+  p->priority = 60;
   p->nrun = 0;
-  p->sched_time = 0;
   p->rtime = 0;
-  p->schedend_time = 0;
+  p->wtime = 0;
 #endif
 }
 
@@ -549,11 +549,9 @@ int _priority(struct proc *p)
 {
   int nice;
   int dp;
-  int wtime;
 
-  wtime = p->schedend_time - p->sched_time - p->rtime;
-  if (p->rtime + wtime != 0)
-    nice = (wtime * 10 / (p->rtime + wtime));
+  if (p->rtime + p->wtime != 0)
+    nice = (p->wtime * 10 / (p->rtime + p->wtime));
   else
     nice = 5;
   dp = p->priority - nice + 5;
@@ -561,24 +559,22 @@ int _priority(struct proc *p)
   return (dp > 100) ? 100 : dp;
 }
 
-int set_priority(int priority, int pid)
+void set_priority(int priority, int pid, int *old)
 {
   struct proc *p;
-  int old = 0;
   for (p = proc; p < &proc[NPROC]; p++)
   {
-    acquire(&p->lock);
     if (p->pid == pid)
     {
-      old = p->priority;
+      acquire(&p->lock);
+      *old = p->priority;
       p->priority = priority;
       p->rtime = 0;
       release(&p->lock);
-      return old;
+      if (*old > priority)
+        yield();
     }
-    release(&p->lock);
   }
-  return -1;
 }
 #endif
 
@@ -599,6 +595,19 @@ void update_time(void)
       p->quanta--;
 #endif
     }
+#ifdef PBS
+    else if (p->state == SLEEPING)
+    {
+      p->wtime++;
+    }
+#endif
+#ifdef MLFQ
+    else if (p->state == RUNNABLE && p->in_queue == 0)
+    {
+      qpush(&mlfq[p->priority], p);
+      p->in_queue = 1;
+    }
+#endif
     release(&p->lock);
   }
 }
@@ -696,7 +705,7 @@ void scheduler(void)
           }
           else if (chosen->nrun == p->nrun)
           {
-            if (chosen->intime > p->intime)
+            if (chosen->intime < p->intime)
             {
               release(&chosen->lock);
               chosen = p;
@@ -710,9 +719,9 @@ void scheduler(void)
     if (!chosen)
       continue;
     chosen->state = RUNNING;
-    chosen->sched_time = ticks;
     chosen->nrun++;
     chosen->rtime = 0;
+    chosen->wtime = 0;
     c->proc = chosen;
     swtch(&c->context, &chosen->context);
     c->proc = 0;
@@ -721,7 +730,7 @@ void scheduler(void)
 #ifdef MLFQ
     struct proc *chosen = 0;
     // Reset priority for old processes /Aging/
-    for (struct proc *p = proc; p < &proc[NPROC]; p++)
+    for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
       if (p->state == RUNNABLE && ticks - p->q_enter >= AGETICK)
@@ -734,16 +743,6 @@ void scheduler(void)
         }
         if (p->priority != 0)
           p->priority--;
-      }
-      release(&p->lock);
-    }
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE && p->in_queue == 0)
-      {
-        qpush(&mlfq[p->priority], p);
-        p->in_queue = 1;
       }
       release(&p->lock);
     }
@@ -812,9 +811,6 @@ void yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-#ifdef PBS
-  p->schedend_time = ticks;
-#endif
   p->state = RUNNABLE;
   sched();
   release(&p->lock);
@@ -884,9 +880,6 @@ void wakeup(void *chan)
       acquire(&p->lock);
       if (p->state == SLEEPING && p->chan == chan)
       {
-#ifdef PBS
-        p->schedend_time = ticks;
-#endif
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -909,10 +902,7 @@ int kill(int pid)
       p->killed = 1;
       if (p->state == SLEEPING)
       {
-// Wake process from sleep().
-#ifdef PBS
-        p->schedend_time = ticks;
-#endif
+        // Wake process from sleep().
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -1000,19 +990,11 @@ void procdump(void)
 #endif
 #ifdef PBS
     int wtime = ticks - p->intime - p->trtime;
-    int nice;
-    if (p->rtime + wtime != 0)
-      nice = (wtime * 10 / (p->rtime + wtime));
-    else
-      nice = 5;
-    int dp = p->priority - nice + 5;
-    dp = (dp < 0) ? 0 : dp;
-    dp = (dp > 100) ? 100 : dp;
-    printf("%d %d %s %s %d %d %d", p->pid, dp, state, p->name, p->trtime, wtime, p->nrun);
+    printf("%d %d %s %s %d %d %d", p->pid, _priority(p), state, p->name, p->trtime, wtime, p->nrun);
 #endif
 #ifdef MLFQ
     int wtime = ticks - p->q_enter;
-    printf("%d %d %s %d %d %d %d %d %d %d %d",p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4]);
+    printf("%d %d %s %d %d %d %d %d %d %d %d",p->pid, p->priority, state, p->trtime, wtime, p->nrun, p->qrtime[0], p->qrtime[1], p->qrtime[2], p->qrtime[3], p->qrtime[4] );
 #endif
     printf("\n");
   }

@@ -132,7 +132,9 @@ sys_set_priority(void)
   return -1;
 #endif
   int priority, pid;
+  int old = -1;
   argint(0, &priority);
   argint(1, &pid);
-  return set_priority(priority, pid);
+  set_priority(priority, pid, &old);
+  return old;
 }

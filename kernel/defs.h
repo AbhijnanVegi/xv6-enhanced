@@ -106,7 +106,7 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 void            trace(int trace_mask);
-int             set_priority(int priority, int pid);
+void            set_priority(int priority, int pid, int* old);
 int             waitx(uint64 addr,int* rtime, int* wtime);
 // swtch.S
 void            swtch(struct context*, struct context*);
